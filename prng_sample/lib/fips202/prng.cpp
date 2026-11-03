@@ -1,20 +1,39 @@
 #include "prng.h"
 
-// This functions supports for Linux and macOS. For Windows, 
-// you may need to use a different method to get random bytes.
+// This function supports Linux, macOS, and Windows.
 void randombytes(uint8_t *out, uint8_t outlen)
 {
+#if defined(_WIN32)
+    HCRYPTPROV h_prov = 0;
+    if (CryptAcquireContext(&h_prov, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+    {
+        CryptGenRandom(h_prov, outlen, out);
+        CryptReleaseContext(h_prov, 0);
+    }
+    else
+    {
+        for (uint8_t i = 0; i < outlen; i++)
+        {
+            out[i] = (uint8_t)(rand() & 0xFF);
+        }
+    }
+#else
     ssize_t ret;
     while (outlen > 0)
     {
         ret = getrandom(out, outlen, 0);
         if ((ret == -1) && (errno == EINTR))
+        {
             continue;
+        }
         else if (ret < 0)
+        {
             abort();
+        }
         out += ret;
         outlen -= ret;
     }
+#endif
 }
 
 void prng_seed(prng_ctx *ctx, const uint8_t *seed, size_t seedlen)
