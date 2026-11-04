@@ -671,6 +671,45 @@ std::ostream &operator<<(std::ostream &os, const uint1024_t &val)
 uint1024_t uint1024_t::mul(const uint512_t &a, const uint512_t &b)
 {
     uint1024_t res;
+#if !defined(HAS_INT128)
+    // Portable 32-bit schoolbook multiplication. Each product plus the
+    // destination word and carry fits exactly in uint64_t.
+    uint32_t a_words[16];
+    uint32_t b_words[16];
+    uint32_t out_words[32] = {0};
+    for (size_t i = 0; i < 8; ++i)
+    {
+        a_words[2 * i] = (uint32_t)a.digits[i];
+        a_words[2 * i + 1] = (uint32_t)(a.digits[i] >> 32);
+        b_words[2 * i] = (uint32_t)b.digits[i];
+        b_words[2 * i + 1] = (uint32_t)(b.digits[i] >> 32);
+    }
+    for (size_t i = 0; i < 16; ++i)
+    {
+        uint64_t carry = 0;
+        for (size_t j = 0; j < 16; ++j)
+        {
+            const uint64_t sum = (uint64_t)a_words[i] * b_words[j] +
+                                 out_words[i + j] + carry;
+            out_words[i + j] = (uint32_t)sum;
+            carry = sum >> 32;
+        }
+        size_t k = i + 16;
+        while (carry != 0 && k < 32)
+        {
+            const uint64_t sum = (uint64_t)out_words[k] + carry;
+            out_words[k] = (uint32_t)sum;
+            carry = sum >> 32;
+            ++k;
+        }
+    }
+    for (size_t i = 0; i < 16; ++i)
+    {
+        res.digits[i] = (uint64_t)out_words[2 * i] |
+                        ((uint64_t)out_words[2 * i + 1] << 32);
+    }
+    return res;
+#else
     for (size_t i = 0; i < 8; i++)
     {
         if (a.digits[i] == 0)
@@ -680,36 +719,9 @@ uint1024_t uint1024_t::mul(const uint512_t &a, const uint512_t &b)
         uint64_t carry = 0;
         for (size_t j = 0; j < 8; j++)
         {
-#if defined(HAS_INT128)
             uint128_t prod = (uint128_t)a.digits[i] * b.digits[j] + res.digits[i + j] + carry;
             res.digits[i + j] = (uint64_t)prod;
             carry = (uint64_t)(prod >> 64);
-#else
-            uint64_t a_lo = a.digits[i] & 0xFFFFFFFFULL;
-            uint64_t a_hi = a.digits[i] >> 32;
-            uint64_t b_lo = b.digits[j] & 0xFFFFFFFFULL;
-            uint64_t b_hi = b.digits[j] >> 32;
-
-            uint64_t p0 = a_lo * b_lo;
-            uint64_t p1 = a_lo * b_hi;
-            uint64_t p2 = a_hi * b_lo;
-            uint64_t p3 = a_hi * b_hi;
-
-            uint64_t mid = p1 + (p0 >> 32) + (carry & 0xFFFFFFFFULL);
-            uint64_t mid_carry = (mid < p1) ? (1ULL << 32) : 0;
-            mid += p2;
-            if (mid < p2)
-            {
-                mid_carry += (1ULL << 32);
-            }
-
-            uint64_t cur_low = (p0 & 0xFFFFFFFFULL) | (mid << 32);
-            uint64_t sum = res.digits[i + j] + cur_low;
-            uint64_t c_sum = (sum < res.digits[i + j]) ? 1 : 0;
-            res.digits[i + j] = sum;
-
-            carry = p3 + (mid >> 32) + (carry >> 32) + mid_carry + c_sum;
-#endif
         }
         size_t k = i + 8;
         while (carry > 0 && k < 16)
@@ -721,6 +733,7 @@ uint1024_t uint1024_t::mul(const uint512_t &a, const uint512_t &b)
         }
     }
     return res;
+#endif
 }
 
 uint512_t uint1024_t::mod(const uint1024_t &a, const uint512_t &b)
@@ -749,8 +762,145 @@ uint512_t uint1024_t::mod(const uint1024_t &a, const uint512_t &b)
 
 uint512_t uint1024_t::mul_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod)
 {
+    if (mod.is_odd() && !mod.is_one())
+    {
+        uint512_montgomery_t montgomery(mod);
+        if (montgomery.is_valid())
+        {
+            return montgomery.multiply_mod(a, b);
+        }
+    }
     uint1024_t prod = uint1024_t::mul(a, b);
     return uint1024_t::mod(prod, mod);
+}
+
+uint512_montgomery_t::uint512_montgomery_t(const uint512_t &mod)
+    : modulus_(mod), r_squared_(), negative_inverse_(0), valid_(false)
+{
+    if (!mod.is_odd() || mod.is_one() || mod.is_zero())
+    {
+        return;
+    }
+
+    // Newton iteration computes mod[0]^-1 modulo 2^32; negate it for REDC.
+    uint32_t inverse = 1;
+    for (size_t i = 0; i < 5; ++i)
+    {
+        inverse *= uint32_t(2) - (uint32_t)mod.digits[0] * inverse;
+    }
+    negative_inverse_ = uint32_t(0) - inverse;
+
+    // R^2 mod n, where R=2^512. This setup is done once per exponentiation.
+    r_squared_ = uint512_t(1);
+    for (size_t i = 0; i < 1024; ++i)
+    {
+        r_squared_ = uint1024_t::add_mod(r_squared_, r_squared_, modulus_);
+    }
+    valid_ = true;
+}
+
+bool uint512_montgomery_t::is_valid() const
+{
+    return valid_;
+}
+
+uint512_t uint512_montgomery_t::reduce_product(const uint1024_t &product) const
+{
+    // Use radix 2^32 so this reduction works identically on compilers with
+    // and without a native 128-bit integer type.
+    uint32_t n[16];
+    uint32_t t[33] = {0};
+    for (size_t i = 0; i < 8; ++i)
+    {
+        n[2 * i] = (uint32_t)modulus_.digits[i];
+        n[2 * i + 1] = (uint32_t)(modulus_.digits[i] >> 32);
+    }
+    for (size_t i = 0; i < 16; ++i)
+    {
+        t[2 * i] = (uint32_t)product.digits[i];
+        t[2 * i + 1] = (uint32_t)(product.digits[i] >> 32);
+    }
+
+    for (size_t i = 0; i < 16; ++i)
+    {
+        const uint32_t m = t[i] * (uint32_t)negative_inverse_;
+        uint64_t carry = 0;
+        for (size_t j = 0; j < 16; ++j)
+        {
+            const uint64_t sum = (uint64_t)m * n[j] + t[i + j] + carry;
+            t[i + j] = (uint32_t)sum;
+            carry = sum >> 32;
+        }
+
+        size_t k = i + 16;
+        while (carry != 0 && k < 33)
+        {
+            const uint64_t sum = (uint64_t)t[k] + carry;
+            t[k] = (uint32_t)sum;
+            carry = sum >> 32;
+            ++k;
+        }
+    }
+
+    uint512_t result;
+    for (size_t i = 0; i < 16; ++i)
+    {
+        result.digits[i / 2] |= (uint64_t)t[i + 16] << ((i % 2) * 32);
+    }
+
+    if (t[32] != 0 || result >= modulus_)
+    {
+        uint64_t borrow = 0;
+        for (size_t i = 0; i < 8; ++i)
+        {
+            const uint64_t old = result.digits[i];
+            const uint64_t after_borrow = old - borrow;
+            const uint64_t borrow1 = old < borrow ? 1 : 0;
+            const uint64_t value = after_borrow - modulus_.digits[i];
+            const uint64_t borrow2 = after_borrow < modulus_.digits[i] ? 1 : 0;
+            result.digits[i] = value;
+            borrow = borrow1 | borrow2;
+        }
+        // A ninth limb can only be one; subtracting n consumes the borrow.
+    }
+    return result;
+}
+
+uint512_t uint512_montgomery_t::multiply_montgomery(const uint512_t &a, const uint512_t &b) const
+{
+    if (!valid_)
+    {
+        return uint512_t();
+    }
+    return reduce_product(uint1024_t::mul(a, b));
+}
+
+uint512_t uint512_montgomery_t::to_montgomery(const uint512_t &value) const
+{
+    if (!valid_)
+    {
+        return uint512_t();
+    }
+    const uint512_t reduced = uint1024_t::mod(uint1024_t(value), modulus_);
+    return multiply_montgomery(reduced, r_squared_);
+}
+
+uint512_t uint512_montgomery_t::from_montgomery(const uint512_t &value) const
+{
+    if (!valid_)
+    {
+        return uint512_t();
+    }
+    return multiply_montgomery(value, uint512_t(1));
+}
+
+uint512_t uint512_montgomery_t::multiply_mod(const uint512_t &a, const uint512_t &b) const
+{
+    if (!valid_)
+    {
+        return uint512_t();
+    }
+    return from_montgomery(multiply_montgomery(to_montgomery(a), to_montgomery(b)));
 }
 
 uint512_t uint1024_t::add_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod)

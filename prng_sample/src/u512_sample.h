@@ -96,6 +96,26 @@ struct uint1024_t
     static uint512_t sub_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod);
 };
 
+// Montgomery arithmetic context for odd 512-bit moduli. Values passed to
+// multiply_montgomery() must already be in Montgomery representation.
+class uint512_montgomery_t
+{
+public:
+    explicit uint512_montgomery_t(const uint512_t &mod);
+    bool is_valid() const;
+    uint512_t to_montgomery(const uint512_t &value) const;
+    uint512_t from_montgomery(const uint512_t &value) const;
+    uint512_t multiply_montgomery(const uint512_t &a, const uint512_t &b) const;
+    uint512_t multiply_mod(const uint512_t &a, const uint512_t &b) const;
+
+private:
+    uint512_t modulus_;
+    uint512_t r_squared_;
+    uint64_t negative_inverse_;
+    bool valid_;
+    uint512_t reduce_product(const uint1024_t &product) const;
+};
+
 // Operators for uint1024_t
 uint1024_t operator+(const uint1024_t &a, const uint1024_t &b);
 uint1024_t operator-(const uint1024_t &a, const uint1024_t &b);
