@@ -55,7 +55,22 @@ test-prime: | folders
 run-test-prime: test-prime
 	./$(BIN)/test-prime
 
+test-private-key: | folders
+	$(CPP) $(CPP_FLAGS) $(SRC)/test_private_key.cpp $(SRC)/private_key.cpp $(DH_SRC) $(U512_SRC) $(PRNG_SRC) $(SHA3_SRC) $(INCLUDE) $(PRNG_LIBS) -o $(BIN)/$@
+
+run-test-private-key: test-private-key
+	./$(BIN)/test-private-key
+
+dh: | folders
+	$(CPP) $(CPP_FLAGS) $(SRC)/main_dh.cpp $(SRC)/private_key.cpp $(PRIME_SRC) $(DH_SRC) $(U512_SRC) $(PRNG_SRC) $(SHA3_SRC) $(INCLUDE) $(PRNG_LIBS) -o $(BIN)/$@
+
+run-dh: dh
+	./$(BIN)/dh
+
+test-dh: dh
+	./$(BIN)/dh --test
+
 clean:
 	rm -rf ./bin
 
-.PHONY: folders prng run-prng test-u512 run-test-u512 prime-module test-prime run-test-prime clean
+.PHONY: folders prng run-prng test-u512 run-test-u512 prime-module test-prime run-test-prime test-private-key run-test-private-key dh run-dh test-dh clean

@@ -1,5 +1,61 @@
 ## Lab01: Số nguyên tố & Trao đổi khóa Diffie-Hellman
 
+### Chạy chương trình trao đổi khóa hoàn chỉnh
+
+`src/main_dh.cpp` mô phỏng Alice và Bob trong một tiến trình: sinh safe prime
+512 bit `p=2q+1`, kiểm tra lại `p` và `q`, tìm phần tử sinh `g`, sinh khóa
+riêng trong `[2,p-2]`, trao đổi khóa công khai và so sánh hai bí mật chung.
+Với safe prime, `g` được chọn sao cho `g^2 mod p != 1` và `g^q mod p != 1`.
+Chế độ mặc định seed PRNG từ hệ điều hành, dừng nếu lấy entropy thất bại;
+chỉ in tham số và khóa công khai. Sinh safe prime 512 bit có thể mất thời gian.
+
+Từ `prng_sample/` trên Linux/WSL:
+
+```sh
+make run-dh       # Sinh tham số 512 bit và trao đổi khóa
+make test-dh      # Kiểm tra nhanh với p=23 và seed cố định
+```
+
+Trên PowerShell với MinGW:
+
+```powershell
+g++ -std=c++14 -O3 -Wall -Wextra -Wpedantic src/main_dh.cpp src/private_key.cpp src/prime_sample.cpp src/dh_sample.cpp src/u512_sample.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I src -I lib/fips202 -ladvapi32 -o bin/dh.exe
+if ($LASTEXITCODE -eq 0) { & .\bin\dh.exe --test }
+# Sau khi build thành công, chạy chế độ 512 bit:
+# & .\bin\dh.exe
+```
+
+Chế độ `--test` dùng seed cố định đã khởi tạo đầy đủ và in hai bí mật để
+đối chiếu; không dùng các giá trị này để bảo vệ dữ liệu. Chương trình trả
+về 0 khi hai bí mật khớp, 1 khi có lỗi. Đây là mô phỏng bài tập, chưa có
+truyền mạng, xác thực đối tác hoặc bước dẫn xuất khóa mã hóa từ bí mật chung.
+
+### Sinh khóa riêng Alice và Bob
+
+Sau khi seed `prng_ctx` và thống nhất số nguyên tố `p`, gọi hai lần:
+
+```cpp
+const uint512_t alice_private = generate_private_key(&ctx, p);
+const uint512_t bob_private = generate_private_key(&ctx, p);
+```
+
+Hàm trong `src/private_key.cpp` dùng rejection sampling để sinh đều trong
+`[2, p-2]`, hỗ trợ đến 512 bit. Trả về 0 nếu `ctx == NULL` hoặc `p < 5`;
+bên gọi chịu trách nhiệm kiểm tra `p` là số nguyên tố và khởi tạo PRNG.
+Hai khóa được lấy độc lập, có thể trùng nhau một cách ngẫu nhiên.
+
+Chạy test trên Linux/WSL: `make run-test-private-key`.
+Trên PowerShell, từ `prng_sample/`:
+
+```powershell
+g++ -std=c++14 -O3 -Wall -Wextra -Wpedantic src/test_private_key.cpp src/private_key.cpp src/dh_sample.cpp src/u512_sample.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I src -I lib/fips202 -ladvapi32 -o bin/test-private-key.exe
+if ($LASTEXITCODE -eq 0) { & .\bin\test-private-key.exe }
+```
+
+Test dùng seed cố định đã khởi tạo đầy đủ, kiểm tra giới hạn khóa, tái lập
+kết quả, các ranh giới limb đến 512 bit và bí mật chung Alice/Bob với `p=23`.
+Seed cố định chỉ dành cho test; khi tích hợp cần liên kết thêm `private_key.cpp`.
+
 Repo cung cấp thư viện sinh số giả ngẫu nhiên (PRNG) dùng SHAKE128, một XOF
 (Extendable-Output Function).
 
