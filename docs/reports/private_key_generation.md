@@ -1,6 +1,8 @@
 # Module Sinh Khóa Riêng Cho Trao Đổi Khóa Diffie–Hellman
 
-Tài liệu này mô tả module `prng_sample/src/dh_sample.cpp` và các khai báo trong `prng_sample/src/dh_sample.h`.
+Tài liệu này mô tả module `prng_sample/src/private_key.cpp` và các khai báo trong `prng_sample/src/dh_sample.h`.
+Nội dung kiểm thử lịch sử bên dưới được cập nhật bởi `generate_private_key.md`:
+bộ test chính kiểm tra tái lập/ranh giới limb, bộ mở rộng kiểm tra thống kê và DH 512 bit.
 
 ---
 
@@ -15,7 +17,7 @@ Hàm sinh khóa riêng ngẫu nhiên nhận con trỏ ngữ cảnh PRNG (phục 
   - Phải khác `NULL`. Nếu `ctx == NULL`, hàm trả về `uint512_t(0)`.
 - **Đầu vào `p`:**
   - Số nguyên lớn modulus của nhóm Diffie–Hellman (thường là safe prime 512 bit trở lên).
-  - Điều kiện hợp lệ: $p \ge 4$. Nếu $p < 4$, khoảng $[2, p - 2]$ bị rỗng hoặc không hợp lệ (ví dụ: với $p=3$, khoảng $[2, 1]$ là rỗng), hàm trả về `uint512_t(0)`.
+  - Điều kiện hợp lệ: $p \ge 5$. Hàm trả về `uint512_t(0)` nếu $p < 5$; p=4 không phải modulus nguyên tố hợp lệ cho hợp đồng này.
 - **Đầu ra:**
   - Một số nguyên lớn `uint512_t` được chọn ngẫu nhiên phân phối đều trong đoạn $[2, p - 2]$.
   - Trả về `uint512_t(0)` nếu bất kỳ tham số đầu vào nào không hợp lệ.
@@ -27,9 +29,9 @@ Hàm sinh khóa riêng ngẫu nhiên nhận con trỏ ngữ cảnh PRNG (phục 
 Hàm tiện ích nạp chồng (overload), cho phép gọi trực tiếp `generate_private_key(p)` đúng theo cú pháp hàm `main` mẫu của đề bài Lab01.
 
 - **Đầu vào `p`:**
-  - Số nguyên lớn modulus, yêu cầu $p \ge 4$.
+  - Số nguyên lớn modulus, yêu cầu $p \ge 5$.
 - **Đầu ra:**
-  - Một số nguyên lớn `uint512_t` ngẫu nhiên đều trong đoạn $[2, p - 2]$. Trả về `uint512_t(0)` nếu $p < 4$.
+  - Một số nguyên lớn `uint512_t` ngẫu nhiên đều trong đoạn $[2, p - 2]$. Trả về `uint512_t(0)` nếu $p < 5$.
 - **Cơ chế:**
   - Tự động gọi `randombytes()` để trích xuất 32 byte (256 bit) entropy bảo mật từ hệ điều hành (`CryptGenRandom` trên Windows hoặc `getrandom` trên Linux).
   - Khởi tạo ngữ cảnh PRNG SHAKE128 cục bộ rồi gọi `generate_private_key(&ctx, p)`. Mỗi lần gọi sinh ra một khóa riêng độc lập hoàn toàn.
@@ -90,18 +92,18 @@ Vì không gian sinh $2^L$ không chia hết cho $(p - 3)$, các số dư nhỏ 
 
 ```mermaid
 flowchart TD
-    Start(["Bắt đầu generate_private_key(ctx, p)"]) --> CheckParam{"ctx != NULL<br/>và p >= 4 ?"}
+    Start(["Bắt đầu generate_private_key(ctx, p)"]) --> CheckParam{"ctx != NULL<br/>và p >= 5 ?"}
     CheckParam -- "Không" --> RetZero["Trả về uint512_t(0)"]
-    CheckParam -- "Có" --> CalcLimit["Đặt limit = p - 3<br/>Tính L = limit.bit_length()"]
-    CalcLimit --> DrawBits["Rút L bit ngẫu nhiên từ PRNG SHAKE128:<br/>v = random_bits(ctx, L)"]
+    CheckParam -- "Có" --> CalcLimit["Đặt limit = p - 3<br/>Tính L = (limit - 1).bit_length()"]
+    CalcLimit --> DrawBits["Rút L bit ngẫu nhiên từ PRNG SHAKE128:<br/>Read only the required limbs; mask unused bits"]
     DrawBits --> CheckReject{"v < limit ?"}
     CheckReject -- "Không (v >= limit)<br/>Tỷ lệ < 50%" --> DrawBits
     CheckReject -- "Có (Chấp nhận)<br/>Tỷ lệ >= 50%" --> ShiftRange["Tịnh tiến khoảng:<br/>private_key = v + 2"]
     ShiftRange --> Done(["Trả về private_key trong [2, p - 2]"])
 ```
 
-1. **Bước 1:** Kiểm tra hợp lệ (`ctx != NULL` và $p \ge 4$). Nếu sai, trả về 0.
-2. **Bước 2:** Đặt $\text{limit} = p - 3$. Đo chiều dài bit cần thiết: $L = \text{limit.bit\_length()}$.
+1. **Bước 1:** Kiểm tra hợp lệ (`ctx != NULL` và $p \ge 5$). Nếu sai, trả về 0.
+2. **Bước 2:** Đặt $\text{limit} = p - 3$. Đo chiều dài bit cần thiết: $L = \text{(limit - 1).bit\_length()}$.
 3. **Bước 3:** Rút $L$ bit ngẫu nhiên từ SHAKE128 để được số $v \in [0, 2^L - 1]$ thông qua hàm `random_bits`.
 4. **Bước 4 (Từ chối / Chấp nhận):**
    - Nếu $v < \text{limit}$: Chấp nhận $v$.
@@ -111,19 +113,21 @@ flowchart TD
    - Khi $v = p - 4 \implies \text{private\_key} = p - 2$.
    - Mọi giá trị trong $[2, p - 2]$ đều có xác suất xuất hiện bằng nhau tuyệt đối: $P = \frac{1}{p - 3}$.
 
-Do $2^{L-1} \le \text{limit} < 2^L$, xác suất chấp nhận mỗi lần rút luôn đạt $P_{\text{accept}} \ge 50\%$. Số lần lặp kỳ vọng $E[N] < 2$, thuật toán kết thúc rất nhanh.
+Do $2^{L-1} < \text{limit} \le 2^L$, xác suất chấp nhận mỗi lần rút luôn đạt $P_{\text{accept}} \ge 50\%$. Số lần lặp kỳ vọng $E[N] < 2$, thuật toán kết thúc rất nhanh.
 
 ---
 
 ## 5. Kết Quả Kiểm Thử (Test Cases & Verification)
 
-Bộ kiểm thử tại `prng_sample/src/test_private_key.cpp` đã thực thi và kiểm chứng các trường hợp sau:
+Bộ kiểm thử chính ở `src/test_private_key.cpp`; các ca thống kê/512 bit bên dưới
+ở `src/test_private_key_extended.cpp`. Kết quả thống kê dưới đây là log lịch sử
+của thuật toán cũ, không đại diện chuỗi PRNG sau khi đổi cách lấy số limb.
 
 1. **Kiểm tra tham số không hợp lệ:**
    - `ctx == NULL` $\rightarrow$ trả về 0 (Đạt).
-   - $p \in \{0, 1, 2, 3\}$ ($p < 4$) $\rightarrow$ trả về 0 (Đạt).
+   - $p \in \{0, 1, 2, 3, 4\}$ ($p < 5$) $\rightarrow$ trả về 0 (Đạt).
 2. **Kiểm tra biên số nhỏ:**
-   - $p = 4$ (khoảng $[2, 2]$) $\rightarrow$ luôn trả về 2 (Đạt).
+   - $p = 4$ bị từ chối, trả về 0 vì hợp đồng yêu cầu $p \ge 5$.
    - $p = 5$ (khoảng $[2, 3]$) $\rightarrow$ chỉ xuất hiện 2 và 3 (Đạt).
    - $p = 7$ (khoảng $[2, 5]$) $\rightarrow$ bao phủ đủ cả 4 giá trị $\{2, 3, 4, 5\}$ (Đạt).
 3. **Kiểm tra tính phân phối đều (Thực nghiệm loại bỏ Modulo Bias):**
@@ -132,11 +136,11 @@ Bộ kiểm thử tại `prng_sample/src/test_private_key.cpp` đã thực thi v
    - Số 3: 4,975 lần ($24.88\%$)
    - Số 4: 4,984 lần ($24.92\%$)
    - Số 5: 5,007 lần ($25.04\%$)
-   $\rightarrow$ Tần suất xuất hiện đồng đều tuyệt đối quanh mốc $25\%$, không bị lệch.
+   $\rightarrow$ Các tần suất nằm trong ngưỡng kiểm tra; mẫu hữu hạn không chứng minh phân phối đều tuyệt đối.
 4. **Kiểm tra với Safe Prime 512 bit:**
    - Sinh khóa riêng Alice: $a \in [2, p - 2]$ (511 bits).
    - Sinh khóa riêng Bob: $b \in [2, p - 2]$ (506 bits).
-   - Hai khóa độc lập khác nhau: $a \neq b$.
+   - Hai khóa cố định trong ca này khác nhau; hai lần lấy mẫu độc lập vẫn có thể trùng, không bắt buộc $a \neq b$.
 5. **Mô phỏng trao đổi khóa Diffie–Hellman hoàn chỉnh:**
    - Alice tính: $A = g^a \bmod p$
    - Bob tính: $B = g^b \bmod p$
@@ -149,9 +153,9 @@ Bộ kiểm thử tại `prng_sample/src/test_private_key.cpp` đã thực thi v
 ## 6. Các Lỗi Phát Hiện Khi Test và Cách Khắc Phục
 
 1. **Lỗi tràn mảng khi $bits = 512$:**
-   Trong `random_bits`, nếu $bits = 512$, phép tính $full\_words = 512 / 64 = 8$. Nếu truy cập `digits[full_words]` mà không kiểm tra $remaining\_bits \neq 0$ thì sẽ ghi vào phần tử thứ 9 ngoài mảng `digits[8]`. Đã khắc phục bằng điều kiện bảo vệ mảng an toàn.
-2. **Lỗi tràn dưới (Underflow) khi $p < 4$:**
-   Nếu người dùng truyền vào số nhỏ $p \le 3$, phép trừ không dấu $p - 3$ sẽ bị tràn số thành giá trị cực lớn gần $2^{512}$. Đã khắc phục bằng cách đặt guard `if (ctx == NULL || p < uint512_t(4)) return uint512_t(0);`.
+   Chỉ mask limb cuối khi `bits % 64 != 0`; do đó khi bits=512 không truy cập digits[8]. Ca biên đã có trong test chính.
+2. **Lỗi tràn dưới (Underflow) khi $p < 5$:**
+   Guard hiện tại là `if (ctx == NULL || p < uint512_t(5)) return uint512_t(0);`, trước khi tính range. Phép p−3 có thể tràn nếu p<3; p=3 có khoảng rỗng, p=4 không đạt hợp đồng modulus nguyên tố.
 3. **Lỗi liên kết Linker trên Windows:**
    Khi sử dụng `CryptGenRandom`, trình biên dịch cần liên kết thư viện hệ thống Windows `-ladvapi32`. Đã cập nhật vào `Makefile` để build tự động mượt mà.
 
@@ -162,7 +166,7 @@ Bộ kiểm thử tại `prng_sample/src/test_private_key.cpp` đã thực thi v
 ### Lệnh chạy nhanh trên Windows (PowerShell):
 ```powershell
 cd prng_sample
-g++ -std=c++14 -O3 -Wall -Wextra -Wpedantic src/test_private_key.cpp src/dh_sample.cpp src/u512_sample.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I src -I lib/fips202 -ladvapi32 -o bin/test-private-key.exe
+g++ -std=c++14 -O3 -Wall -Wextra -Wpedantic src/test_private_key_extended.cpp src/private_key.cpp src/dh_sample.cpp src/u512_sample.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I src -I lib/fips202 -ladvapi32 -o bin/test-private-key.exe
 .\bin\test-private-key.exe
 ```
 

@@ -77,21 +77,9 @@ Kiểm tra bí mật chung hiện dùng modulus nhỏ, chưa xác nhận trao đ
 với safe prime 512 bit. Các mẫu hữu hạn cũng không chứng minh phân bố đều;
 tính chất đó dựa trên cơ chế lấy mẫu và giả thiết về PRNG.
 
-### Kết quả thực tế đã ghi nhận
+### Runtime status
 
-- Build bằng MinGW GCC 6.3.0 với C++14 thành công, không có cảnh báo
-  với các cờ `-Wall -Wextra -Wpedantic -Wvla -Wredundant-decls`.
-- Khi chạy `test-private-key.exe`, Windows báo:
-
-```text
-An Application Control policy has blocked this file
-```
-
-- Thử chạy ngoài sandbox vẫn bị cùng chính sách chặn.
-- Vì executable chưa chạy được, **chưa có kết quả PASS/FAIL của các assertion**.
-  Chưa ghi nhận được lỗi thuật toán qua thực thi; điều này không có nghĩa
-  hàm đã được xác nhận đúng. Lỗi quan sát được hiện tại là lỗi môi trường
-  chặn thực thi, không phải thông báo lỗi do hàm sinh khóa trả về.
+Windows/MinGW GCC 6.3.0: both private-key test suites and full 512-bit DH passed on 2026-11-08. See [current status](CURRENT_STATUS.md). Earlier Application Control failures were environment-specific historical runs.
 
 ### Cách chạy lại
 

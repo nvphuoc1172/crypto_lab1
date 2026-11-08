@@ -24,6 +24,9 @@ int main(int argc, char **argv);
 | Đối số khác hoặc thừa đối số | In cách sử dụng và trả về mã lỗi 1 |
 
 Chương trình không yêu cầu người dùng nhập khóa riêng hay tham số bằng bàn phím.
+Phần tạo khóa/tính bí mật hiện được gọi qua `perform_dh_exchange` trong
+`dh_exchange.cpp`. Nó thử lại cặp suy biến tối đa 128 lần; mã ở các bước dưới
+minh họa công thức, không phải toàn bộ vòng xử lý thực tế.
 Trong chế độ mặc định, kích thước modulus được cố định là 512 bit.
 
 | Đầu ra | Nội dung |
@@ -129,7 +132,7 @@ make run-dh      # Sinh safe prime 512 bit và trao đổi khóa
 PowerShell với MinGW:
 
 ```powershell
-g++ -std=c++14 -O3 -Wall -Wextra -Wpedantic -Wvla -Wredundant-decls src/main_dh.cpp src/private_key.cpp src/prime_sample.cpp src/dh_sample.cpp src/u512_sample.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I src -I lib/fips202 -ladvapi32 -o bin/dh.exe
+g++ -std=c++14 -O3 -Wall -Wextra -Wpedantic -Wvla -Wredundant-decls src/main_dh.cpp src/dh_exchange.cpp src/private_key.cpp src/prime_sample.cpp src/dh_sample.cpp src/u512_sample.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I src -I lib/fips202 -ladvapi32 -o bin/dh.exe
 if ($LASTEXITCODE -eq 0) { & .\bin\dh.exe --test }
 ```
 
@@ -142,58 +145,53 @@ Sau khi build thành công, chạy chế độ mặc định bằng:
 Sinh safe prime 512 bit có thể mất thời gian; chương trình in thông báo
 trước khi bắt đầu. Chưa có số đo thời gian thực thi được xác nhận.
 
-## 5. Kết quả kiểm thử và lỗi ghi nhận
+## Trạng thái triển khai và kiểm thử — 08/11/2026
 
-### Kết quả thực tế
+Tài liệu này đồng bộ trạng thái hiện tại; các log lỗi trong REPO_REVIEW là lịch sử,
+không phải danh sách lỗi còn tồn tại. Đây là ghi chú kỹ thuật, không thay thế báo cáo PDF.
 
-| Kiểm tra | Kết quả ghi nhận |
+## Các module
+
+| Module | Trách nhiệm |
 | --- | --- |
-| Build `main_dh.cpp` và các mô-đun phụ thuộc bằng MinGW GCC 6.3.0, C++14 | Thành công, exit code 0, không có cảnh báo với các cờ nêu trên |
-| Chạy `bin/dh.exe --test` trong sandbox | Windows Application Control chặn executable |
-| Chạy lại `bin/dh.exe --test` ngoài sandbox | Vẫn bị cùng chính sách chặn |
-| Trao đổi khóa mặc định với safe prime 512 bit | Chưa chạy xác nhận |
+| u512_sample.cpp | Số lớn 512/1024 bit, Montgomery, lấy dư và parse hex |
+| dh_sample.cpp | Lũy thừa mô-đun |
+| prime_sample.cpp | Miller–Rabin, sinh prime và safe prime |
+| private_key.cpp | Cả hai overload sinh khóa riêng; p>=5, kết quả [2,p−2] |
+| dh_exchange.cpp | Tạo cặp khóa, tính bí mật và xử lý giá trị suy biến |
+| main_dh.cpp | Seed hệ điều hành/test, xác minh tham số, chọn g và hiển thị kết quả |
 
-Thông báo lỗi quan sát được:
+## Hành vi demo
 
-```text
-An Application Control policy has blocked this file
+`dh.exe --test` dùng p=23 và seed cố định, in hai bí mật để đối chiếu.
+`dh.exe` sinh safe prime 512 bit, kiểm tra p/q, chọn phần tử sinh toàn nhóm,
+không in khóa riêng hoặc giá trị bí mật. Hai chế độ đều kiểm tra kết quả bằng nhau.
+
+Khóa riêng bằng q vẫn thuộc miền của hàm sinh nhưng tạo khóa công khai p−1.
+Demo loại cặp này và lấy mẫu lại. Nó cũng loại bí mật chung 0, 1, p−1. Tối đa
+128 cặp; hết lượt, đầu vào/nguồn khóa không hợp lệ hoặc bí mật hai bên khác nhau
+thì trả thất bại. Không retry khi có sai khác số học, tránh che lỗi thuật toán.
+
+Hàm nguồn khóa được truyền vào test để ép tình huống khó gặp. `test_dh_exchange.cpp`
+kiểm tra a=q, b=q, bí mật chung 1 trong nhóm tổng hợp cho test, hết lượt thử,
+con trỏ rỗng và nguồn khóa trả 0. Nhóm không-safe-prime chỉ dùng để ép nhánh bảo vệ;
+main luôn kiểm tra safe prime trước khi trao đổi.
+
+## Kiểm chứng
+
+Đợt đối chiếu trước sửa biên đã chạy thành công trên Windows/MinGW GCC 6.3.0,
+C++14: số lớn, private key chính/mở rộng, PRNG, nguyên tố, regression, safe prime
+512 bit và demo DH mặc định. Các ghi nhận App Control chặn thuộc lần chạy cũ.
+
+Lệnh kiểm tra bản sau sửa:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File prng_sample/build.ps1 -Test -TestSafe512
+.\prng_sample\bin\dh.exe
 ```
 
-Đây là lỗi môi trường thực thi. Chưa có kết quả PASS/FAIL của luồng trao
-đổi khóa và chưa ghi nhận được lỗi thuật toán qua chạy chương trình.
-Build thành công không đủ để kết luận trao đổi khóa đã chạy đúng.
+Từ prng_sample/, có thể dùng `mingw32-make test` trên Windows hoặc `make test`
+trên Linux. Bộ test biên mới được tích hợp vào cả hai cách build.
+Linux/MSVC và lỗi API entropy chưa được chạy ép lỗi xác nhận.
 
-Khi chạy được, kết quả thành công mong đợi kết thúc bằng:
-
-```text
-Diffie-Hellman succeeded: shared secrets match.
-```
-
-### Các lỗi chương trình có xử lý
-
-Các nhánh dưới đây đã có trong mã nguồn, nhưng chưa được xác nhận bằng
-thực thi do executable bị chặn:
-
-| Điều kiện | Thông báo / hành vi |
-| --- | --- |
-| Đối số không hợp lệ | In `Usage: ... [--test]`, trả về 1 |
-| Không lấy được entropy hệ điều hành | `Cannot obtain system randomness.`, trả về 1 |
-| Tham số không đạt kiểm tra nguyên tố hoặc độ dài | `Invalid safe prime parameters.`, trả về 1 |
-| Không tìm được phần tử sinh | `Cannot find a generator.`, trả về 1 |
-| Khóa riêng ngoài khoảng | `Invalid private key.`, trả về 1 |
-| Khóa công khai ngoài khoảng | `Invalid public key.`, trả về 1 |
-| Hai bí mật khác nhau | `Diffie-Hellman failed: shared secrets differ.`, trả về 1 |
-
-### Giới hạn hiện tại
-
-- Đây là mô phỏng bài tập trong một tiến trình, chưa có truyền mạng hay
-  xác thực đối tác.
-- Bí mật chung là kết quả số học; chưa có bước dẫn xuất khóa mã hóa (KDF).
-- Khóa riêng có thể bằng `q`, khi đó khóa công khai bằng `p-1` và bị
-  kiểm tra khoảng từ chối. Chương trình hiện dừng với lỗi, chưa tự sinh lại
-  khóa trong trường hợp này. Với `p=23`, đây là trường hợp cần chú ý khi
-  mở rộng kiểm thử sang các seed khác.
-- Kiểm tra bằng nhau không bảo đảm bí mật chung luôn khác 1; chương trình
-  hiện chưa kiểm tra riêng trường hợp bí mật suy biến này.
-- Chưa xác nhận thời gian chạy, trao đổi khóa 512 bit và các nhánh lỗi
-  bằng thực thi trên môi trường cho phép chạy executable.
+Chưa hoàn thiện báo cáo Word/PDF và ZIP bài nộp; các artifact này để thực hiện sau.

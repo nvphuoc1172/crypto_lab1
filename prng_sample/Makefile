@@ -15,6 +15,7 @@ PRNG_SRC:=$(ROOT)/lib/fips202/prng.cpp
 U512_SRC:=$(SRC)/u512_sample.cpp
 DH_SRC:=$(SRC)/dh_sample.cpp
 KEY_SRC:=$(SRC)/private_key.cpp
+EXCHANGE_SRC:=$(SRC)/dh_exchange.cpp
 PRIME_SRC:=$(SRC)/prime_sample.cpp
 PRIME_TEST_SRC:=$(SRC)/test_prime.cpp
 KEY_TEST_SRC:=$(SRC)/test_private_key.cpp
@@ -49,7 +50,7 @@ run-prng: prng
 # Complete Diffie-Hellman Key Exchange Demo
 dh: | folders
 	@echo "### Compiling Diffie-Hellman demo"
-	$(CPP) $(CPP_FLAGS) $(SRC)/main_dh.cpp $(DH_SRC) $(KEY_SRC) $(PRIME_SRC) $(U512_SRC) $(PRNG_SRC) $(SHA3_SRC) $(INCLUDE) $(PRNG_LIBS) -o $(BIN)/$@$(EXE)
+	$(CPP) $(CPP_FLAGS) $(SRC)/main_dh.cpp $(EXCHANGE_SRC) $(DH_SRC) $(KEY_SRC) $(PRIME_SRC) $(U512_SRC) $(PRNG_SRC) $(SHA3_SRC) $(INCLUDE) $(PRNG_LIBS) -o $(BIN)/$@$(EXE)
 
 run-dh: dh
 	$(RUN_BIN)dh$(EXE)
@@ -94,9 +95,13 @@ test-prng: | folders
 test-dh: dh
 	$(RUN_BIN)dh$(EXE) --test
 
-all: prng dh test-u512 test-private-key test-private-key-extended test-prime test-regressions test-prng
+test-dh-exchange: | folders
+	$(CPP) $(CPP_FLAGS) $(SRC)/test_dh_exchange.cpp $(EXCHANGE_SRC) $(KEY_SRC) $(DH_SRC) $(U512_SRC) $(PRNG_SRC) $(SHA3_SRC) $(INCLUDE) $(PRNG_LIBS) -o $(BIN)/$@$(EXE)
+
+all: test-dh-exchange prng dh test-u512 test-private-key test-private-key-extended test-prime test-regressions test-prng
 
 test: all
+	$(RUN_BIN)test-dh-exchange$(EXE)
 	$(RUN_BIN)prng$(EXE)
 	$(RUN_BIN)test-u512$(EXE)
 	$(RUN_BIN)test-private-key$(EXE)
@@ -119,3 +124,5 @@ endif
 .PHONY: all test dh run-dh test-regressions
 
 .PHONY: test-dh test-prng test-private-key-extended
+
+.PHONY: test-dh-exchange

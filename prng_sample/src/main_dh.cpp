@@ -1,4 +1,4 @@
-#include "dh_sample.h"
+#include "dh_exchange.h"
 
 #include <cstring>
 #include <iostream>
@@ -88,39 +88,19 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const uint512_t alice_private = generate_private_key(&ctx, p);
-    const uint512_t bob_private = generate_private_key(&ctx, p);
-    if (alice_private < uint512_t(2) || alice_private > upper ||
-        bob_private < uint512_t(2) || bob_private > upper)
+    dh_exchange_result exchange;
+    if (!perform_dh_exchange(&ctx, p, g, exchange))
     {
-        std::cerr << "Invalid private key.\n";
+        std::cerr << "Cannot complete a non-degenerate DH exchange within 128 attempts.\n";
         return 1;
     }
-
-    const uint512_t alice_public = modular_exponentiation(g, alice_private, p);
-    const uint512_t bob_public = modular_exponentiation(g, bob_private, p);
-    if (alice_public < uint512_t(2) || alice_public > upper ||
-        bob_public < uint512_t(2) || bob_public > upper)
-    {
-        std::cerr << "Invalid public key.\n";
-        return 1;
-    }
-
-    // Simulate exchanging public keys; private keys stay with their owners.
-    const uint512_t alice_secret = modular_exponentiation(bob_public, alice_private, p);
-    const uint512_t bob_secret = modular_exponentiation(alice_public, bob_private, p);
     std::cout << "p = " << p << "\nq = " << q << "\ng = " << g
-              << "\nAlice public key = " << alice_public
-              << "\nBob public key = " << bob_public << "\n";
-    if (alice_secret != bob_secret)
-    {
-        std::cerr << "Diffie-Hellman failed: shared secrets differ.\n";
-        return 1;
-    }
+              << "\nAlice public key = " << exchange.alice_public
+              << "\nBob public key = " << exchange.bob_public << "\n";
     if (test_mode)
     {
-        std::cout << "Alice secret = " << alice_secret
-                  << "\nBob secret = " << bob_secret << "\n";
+        std::cout << "Alice secret = " << exchange.alice_secret
+                  << "\nBob secret = " << exchange.bob_secret << "\n";
     }
     std::cout << "Diffie-Hellman succeeded: shared secrets match.\n";
     return 0;
