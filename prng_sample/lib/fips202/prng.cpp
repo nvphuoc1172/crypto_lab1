@@ -1,21 +1,24 @@
 #include "prng.h"
 
-// This function supports Linux, macOS, and Windows.
+// Windows CryptoAPI / Linux getrandom. Never fall back to rand().
 void randombytes(uint8_t *out, uint8_t outlen)
 {
+    if (outlen == 0)
+        return;
+    if (out == NULL)
+        abort();
 #if defined(_WIN32)
     HCRYPTPROV h_prov = 0;
     if (CryptAcquireContext(&h_prov, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
     {
-        CryptGenRandom(h_prov, outlen, out);
+        const BOOL ok = CryptGenRandom(h_prov, outlen, out);
         CryptReleaseContext(h_prov, 0);
+        if (!ok)
+            abort();
     }
     else
     {
-        for (uint8_t i = 0; i < outlen; i++)
-        {
-            out[i] = (uint8_t)(rand() & 0xFF);
-        }
+        abort();
     }
 #else
     ssize_t ret;
@@ -26,7 +29,7 @@ void randombytes(uint8_t *out, uint8_t outlen)
         {
             continue;
         }
-        else if (ret < 0)
+        else if (ret <= 0)
         {
             abort();
         }
@@ -54,7 +57,7 @@ uint32_t prng_next_u32(prng_ctx *ctx)
 {
     uint8_t buf[4];
     shake128_squeeze(buf, sizeof(buf), &ctx->sponge);
-    return (uint32_t)buf[0] | (uint32_t)(buf[1] << 8) | (uint32_t)(buf[2] << 16) | (uint32_t)(buf[3] << 24);
+    return (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
 }
 
 uint64_t prng_next_u64(prng_ctx *ctx)

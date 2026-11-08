@@ -1,6 +1,7 @@
 #include "u512_sample.h"
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 
 #if defined(_MSC_VER)
     #include <intrin.h>
@@ -144,6 +145,8 @@ uint512_t uint512_t::from_hex(const std::string &hex_str)
         start = 2;
     }
 
+    if (hex_str.size() == start || hex_str.size() - start > 128)
+        throw std::invalid_argument("Expected 1 to 128 hexadecimal digits");
     size_t bit_pos = 0;
     for (int i = (int)hex_str.size() - 1; i >= (int)start && bit_pos < 512; i--)
     {
@@ -163,7 +166,7 @@ uint512_t uint512_t::from_hex(const std::string &hex_str)
         }
         else
         {
-            continue;
+            throw std::invalid_argument("Invalid hexadecimal digit");
         }
 
         for (int b = 0; b < 4 && bit_pos < 512; b++)
@@ -350,7 +353,7 @@ uint64_t operator%(const uint512_t &a, uint64_t m)
 {
     if (m == 0)
     {
-        return 0;
+        throw std::invalid_argument("Modulus must be nonzero");
     }
     uint64_t rem = 0;
     for (int i = 7; i >= 0; i--)
@@ -359,10 +362,19 @@ uint64_t operator%(const uint512_t &a, uint64_t m)
         uint128_t cur = ((uint128_t)rem << 64) | a.digits[i];
         rem = (uint64_t)(cur % m);
 #else
-        uint64_t hi = a.digits[i] >> 32;
-        uint64_t lo = a.digits[i] & 0xFFFFFFFFULL;
-        rem = (((rem << 32) | hi) % m);
-        rem = (((rem << 32) | lo) % m);
+        if (m <= UINT32_MAX)
+        {
+            rem = ((rem << 32) | (a.digits[i] >> 32)) % m;
+            rem = ((rem << 32) | (a.digits[i] & UINT32_MAX)) % m;
+            continue;
+        }
+        for (int bit = 63; bit >= 0; --bit)
+        {
+            // Double without overflowing: rem is always less than m.
+            rem = rem >= m - rem ? rem - (m - rem) : rem + rem;
+            if ((a.digits[i] >> bit) & 1ULL)
+                rem = rem == m - 1 ? 0 : rem + 1;
+        }
 #endif
     }
     return rem;
@@ -740,7 +752,7 @@ uint512_t uint1024_t::mod(const uint1024_t &a, const uint512_t &b)
 {
     if (b.is_zero())
     {
-        return uint512_t();
+        throw std::invalid_argument("Modulus must be nonzero");
     }
     uint1024_t rem;
     uint1024_t b_ext(b);
@@ -905,6 +917,10 @@ uint512_t uint512_montgomery_t::multiply_mod(const uint512_t &a, const uint512_t
 
 uint512_t uint1024_t::add_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod)
 {
+    if (mod.is_zero())
+        throw std::invalid_argument("Modulus must be nonzero");
+    if (a >= mod || b >= mod)
+        return uint1024_t::mod(uint1024_t(a) + uint1024_t(b), mod);
     uint1024_t sum = uint1024_t(a) + uint1024_t(b);
     if (sum >= uint1024_t(mod))
     {
@@ -915,6 +931,11 @@ uint512_t uint1024_t::add_mod(const uint512_t &a, const uint512_t &b, const uint
 
 uint512_t uint1024_t::sub_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod)
 {
+    if (mod.is_zero())
+        throw std::invalid_argument("Modulus must be nonzero");
+    if (a >= mod || b >= mod)
+        return sub_mod(uint1024_t::mod(uint1024_t(a), mod),
+                       uint1024_t::mod(uint1024_t(b), mod), mod);
     if (a >= b)
     {
         return a - b;

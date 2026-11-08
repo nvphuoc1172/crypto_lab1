@@ -3,9 +3,19 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 from xml.dom import minidom as D
 
-ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / '23120074_Report_Lab789.docx'
-OUTPUT = ROOT / 'docs/MAU_BAO_CAO_LAB.docx'
+import argparse
+
+ROOT = Path(__file__).resolve().parents[2]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--source', type=Path, required=True)
+parser.add_argument('--output', type=Path, default=ROOT / 'docs/reports/MAU_BAO_CAO_LAB_GENERATED.docx')
+args = parser.parse_args()
+SOURCE, OUTPUT = args.source, args.output
+if not SOURCE.is_file():
+    parser.error('Source DOCX does not exist')
+if OUTPUT.exists():
+    parser.error('Output already exists; choose a new path to preserve manual edits')
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 def elements(node, tag):

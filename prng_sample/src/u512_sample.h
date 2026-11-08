@@ -37,6 +37,7 @@ struct uint512_t
 
     // String formatting
     std::string to_hex() const;
+    // Throws std::invalid_argument for empty, malformed, or >512-bit input.
     static uint512_t from_hex(const std::string &hex_str);
     static uint512_t from_u64(uint64_t val);
 };
@@ -90,7 +91,7 @@ struct uint1024_t
     // Modulo: 1024-bit % 512-bit -> 512-bit
     static uint512_t mod(const uint1024_t &a, const uint512_t &b);
 
-    // Direct modular arithmetic on 512-bit numbers
+    // Arbitrary inputs are reduced; zero modulus throws std::invalid_argument.
     static uint512_t mul_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod);
     static uint512_t add_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod);
     static uint512_t sub_mod(const uint512_t &a, const uint512_t &b, const uint512_t &mod);

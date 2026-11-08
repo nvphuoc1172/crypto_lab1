@@ -1,2 +1,5 @@
 # Generated Windows executables (all directories).
 *.[eE][xX][eE]
+prng_sample/bin/
+__pycache__/
+*.pyc

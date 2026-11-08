@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 
 - `Lab01.pdf` defines the assignment requirements and submission format.
-- `prng_sample/src/` contains application code: `main_prng.cpp` demonstrates the PRNG; `u512_sample.h` sketches the 512-bit integer type; `dh_sample.h` declares Diffie–Hellman functions. The latter two are incomplete interfaces.
+- `prng_sample/src/` contains application code: `main_prng.cpp` demonstrates the PRNG; `u512_sample.h` sketches the 512-bit integer type; `dh_sample.h` declares Diffie–Hellman functions. Implementations are in matching .cpp files; main_dh.cpp runs the exchange.
 - `prng_sample/lib/fips202/` contains SHAKE/SHA3 and the PRNG wrapper. Keep assignment-specific arithmetic in `src/`.
 - `prng_sample/Makefile` builds the sample; `bin/` and `bin/build/` hold executable and object outputs.
 - `.vscode/` contains local editor/debug settings. `prng_sample.zip` is the supplied archive; edit the extracted sources.
@@ -18,7 +18,7 @@ make run-prng   # Build and run the PRNG demonstration
 make clean      # Remove bin/, including generated objects
 ```
 
-On Windows, use WSL or adapt the platform code first: the current PRNG depends on `sys/random.h` and `getrandom`. Use C++14 or earlier, as required by the assignment; the Makefile currently does not select a language standard explicitly. No full Diffie–Hellman build target exists yet.
+On Windows use build.ps1 -Test -TestSafe512 with MinGW, or mingw32-make test. Linux uses make test. All builds select C++14.
 
 ## Coding Style & Naming Conventions
 
@@ -26,11 +26,11 @@ Follow the application code’s four-space indentation and braces on separate li
 
 ## Testing Guidelines
 
-There is no test framework, test target, or coverage threshold. For new arithmetic and protocol code, add focused checks for carries, borrows, boundary values, modular exponentiation, known primes/composites, and matching Diffie–Hellman secrets. Document how to compile and run any added tests. Use deterministic, fully initialized seeds for reproducible checks.
+Tests use assert; make test or build.ps1 -Test runs them. Do not define NDEBUG. There is no coverage threshold. For new arithmetic and protocol code, add focused checks for carries, borrows, boundary values, modular exponentiation, known primes/composites, and matching Diffie–Hellman secrets. Document how to compile and run any added tests. Use deterministic, fully initialized seeds for reproducible checks.
 
 ## Commit & Pull Request Guidelines
 
-No Git metadata is present in this checkout, so existing commit conventions cannot be verified. Use concise imperative subjects, such as `Implement modular exponentiation`. Keep changes focused. PR descriptions should state the affected assignment requirement, implementation approach, validation commands/results, and platform limitations.
+Keep generated binaries out of the existing Git repository. Use concise imperative subjects, such as `Implement modular exponentiation`. Keep changes focused. PR descriptions should state the affected assignment requirement, implementation approach, validation commands/results, and platform limitations.
 
 ## Assignment Constraints
 

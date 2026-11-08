@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     // 512-bit boundary identity: (n-1)^2 mod n == 1.
     assert(uint1024_t::mul_mod(uint512_t(123), uint512_t(456), uint512_t(1009)) == uint512_t(593));
     const uint512_t wide_mod = uint512_t::from_hex(
-        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff43");
+        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff43");
     const uint512_t wide_minus_one = wide_mod - uint512_t(1);
     const uint512_t wide_product = uint1024_t::mul_mod(wide_minus_one, wide_minus_one, wide_mod);
     if (wide_product != uint512_t(1))
