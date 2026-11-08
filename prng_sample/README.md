@@ -86,3 +86,33 @@ biểu thị tham số đầu vào không hợp lệ. Mô-đun có thể biên d
 Nhân modulo cho modulus lẻ dùng Montgomery reduction để tăng tốc Miller–Rabin.
 Đường nhân 512x512 cũng có bản schoolbook limb 32 bit cho compiler không hỗ trợ
 `__int128`.
+### Windows (PowerShell + MinGW g++)
+
+Chạy từ thư mục `prng_sample`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test
+```
+
+Script biên dịch bằng C++14 rồi chạy demo hoặc bộ kiểm tra PRNG. `Bypass` chỉ
+áp dụng cho tiến trình này, không thay đổi execution policy toàn hệ thống.
+Không cần WSL hay thư viện mật mã cài thêm: `randombytes` gọi BCryptGenRandom
+từ DLL trong thư mục hệ thống Windows; lỗi lấy entropy sẽ dừng chương trình.
+Nhánh Linux vẫn dùng `getrandom`. Makefile hiện dành cho môi trường Unix.
+
+Demo sử dụng seed cố định, khởi tạo đầy đủ để tái hiện kết quả. Để lấy seed
+từ hệ điều hành, dùng `randombytes(seed, sizeof(seed))` với seed 32 byte.
+API `randombytes` hiện nhận độ dài `uint8_t`, tối đa 255 byte mỗi lần gọi.
+
+Bộ kiểm tra xác nhận yêu cầu độ dài 0, giới hạn ghi buffer và thứ tự byte
+của các hàm PRNG so với luồng SHAKE128; không đánh giá chất lượng thống kê RNG.
+Trên Linux có thể chạy bộ kiểm tra bằng:
+
+```sh
+g++ -std=c++14 -O2 -Wall -Wextra -Wpedantic tests/prng_test.cpp lib/fips202/prng.cpp lib/fips202/fips202.c -I lib/fips202 -o bin/prng_test
+./bin/prng_test
+```
+
+Phần số lớn trong `u512_sample.h` vẫn có `__uint128_t`, là phần mở rộng
+compiler; thay đổi PRNG này chưa chuyển phần đó sang MSVC/MinGW 32 bit.

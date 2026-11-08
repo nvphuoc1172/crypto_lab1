@@ -1,4 +1,6 @@
 #include "prng.h"
+#include <stdlib.h>
+#include <string.h>
 
 // This function supports Linux, macOS, and Windows.
 void randombytes(uint8_t *out, uint8_t outlen)
@@ -54,7 +56,7 @@ uint32_t prng_next_u32(prng_ctx *ctx)
 {
     uint8_t buf[4];
     shake128_squeeze(buf, sizeof(buf), &ctx->sponge);
-    return (uint32_t)buf[0] | (uint32_t)(buf[1] << 8) | (uint32_t)(buf[2] << 16) | (uint32_t)(buf[3] << 24);
+    return (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
 }
 
 uint64_t prng_next_u64(prng_ctx *ctx)
