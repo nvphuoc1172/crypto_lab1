@@ -1,4 +1,6 @@
 #include "prng.h"
+#include <stdlib.h>
+#include <string.h>
 
 // Windows CryptoAPI / Linux getrandom. Never fall back to rand().
 void randombytes(uint8_t *out, uint8_t outlen)

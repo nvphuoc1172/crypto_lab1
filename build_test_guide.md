@@ -4,6 +4,14 @@ Cập nhật 08/11/2026. Dùng C++14, GCC/MinGW trên Windows hoặc GCC trên L
 Không cần GMP/NTL; PRNG/SHAKE được cung cấp trong source. Không thêm `-DNDEBUG`
 vì test sử dụng `assert`. Compiler phải nằm trong PATH (`g++ --version`).
 
+## Sau khi ghép main và dev
+
+Khóa riêng được triển khai tại `src/private_key.cpp`, gồm cả overload tự seed.
+Script PowerShell và Makefile đã liên kết module này, giữ các sửa lỗi số học/Windows.
+`-Test` chạy cả hai bộ test khóa riêng, test PRNG, regression và DH `--test`.
+Demo `dh.exe --test` dùng p=23 và in bí mật; `dh.exe` dùng 512 bit và chỉ thông báo
+hai bí mật trùng nhau. Sinh seed cố định chỉ dành cho kiểm tra.
+
 ## PowerShell
 
 Từ thư mục gốc dự án:
