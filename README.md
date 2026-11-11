@@ -10,6 +10,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File prng_sample/build.ps1 -Test 
 ./prng_sample/bin/dh.exe
 ```
 
+Tài liệu các phần chính: [nền tảng số lớn](docs/reports/big_integer.md),
+[sinh và kiểm tra số nguyên tố](docs/reports/prime_generation.md),
+[trao đổi Diffie–Hellman](docs/reports/diffie-hellman.md).
+
 ## Module dh_exchange
 
 `main_dh.cpp` seed PRNG, sinh/kiểm tra safe prime `p=2q+1` và chọn phần tử sinh

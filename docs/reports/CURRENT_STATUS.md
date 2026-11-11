@@ -1,4 +1,4 @@
-# Trạng thái triển khai và kiểm thử — 08/11/2026
+# Trạng thái triển khai và kiểm thử — 08/11/2026; bổ sung 11/11/2026
 
 Tài liệu này đồng bộ trạng thái hiện tại; các log lỗi trong REPO_REVIEW là lịch sử,
 không phải danh sách lỗi còn tồn tại. Đây là ghi chú kỹ thuật, không thay thế báo cáo PDF.
@@ -48,5 +48,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File prng_sample/build.ps1 -Test 
 Từ prng_sample/, có thể dùng `mingw32-make test` trên Windows hoặc `make test`
 trên Linux. Bộ test biên mới được tích hợp vào cả hai cách build.
 Linux/MSVC và lỗi API entropy chưa được chạy ép lỗi xác nhận.
+
+### Bổ sung kiểm thử nền tảng số lớn — 11/11/2026
+
+`test_u512.cpp` bổ sung ca wrap cộng/trừ tại biên 512 bit, carry/borrow qua
+nhiều limb, so sánh giá trị ở các limb khác nhau, bit 63/64/511, dịch 511/512
+bit, truy cập bit ngoài miền và xuất qua stream. Chạy
+`powershell -NoProfile -ExecutionPolicy Bypass -File prng_sample/build.ps1 -Test`;
+toàn bộ build và test trong script hoàn tất thành công trên Windows/MinGW GCC
+6.3.0, C++14. Lần này không chạy thêm `-TestSafe512`.
 
 Chưa hoàn thiện báo cáo Word/PDF và ZIP bài nộp; các artifact này để thực hiện sau.
